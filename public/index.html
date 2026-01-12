@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional E-Sign</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+    
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <style>
+        .page-wrapper { position: relative; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .draggable-item { 
+            position: absolute; cursor: grab; border: 1px dashed #3b82f6; 
+            background: rgba(255, 255, 255, 0.1); padding: 2px; user-select: none; z-index: 10;
+        }
+        .draggable-item:hover { border: 1px solid #2563eb; background: rgba(219, 234, 254, 0.4); }
+        .selected-tool { background-color: #2563eb; color: white; border-color: #2563eb; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen py-10">
+
+    <div class="max-w-6xl mx-auto flex flex-col md:flex-row gap-6 px-4">
+        <div class="w-full md:w-1/4 flex flex-col gap-6">
+            <div class="bg-white p-6 rounded-xl shadow-md sticky top-6">
+                <h1 class="text-2xl font-bold text-gray-800 mb-4">✍️ E-Sign Tools</h1>
+                <div class="space-y-3 mb-6">
+                    <label class="block text-xs font-bold text-gray-500 uppercase">Signer Info</label>
+                    <input type="text" id="signerName" placeholder="Full Name" class="w-full border border-gray-300 p-2 rounded text-sm">
+                    <input type="email" id="signerEmail" placeholder="Email Address" class="w-full border border-gray-300 p-2 rounded text-sm">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-bold text-gray-500 mb-2 uppercase">1. Upload PDF</label>
+                    <input type="file" id="pdfUpload" accept="application/pdf" class="w-full text-sm text-slate-500 file:py-2 file:px-4 file:rounded-full file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"/>
+                </div>
+                <div id="toolPalette" class="hidden flex flex-col gap-2">
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">2. Select Tool</label>
+                    <button id="btnSign" onclick="selectTool('signature')" class="tool-btn py-3 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2 font-semibold text-gray-700 transition">🖊️ Signature</button>
+                    <button id="btnInitial" onclick="selectTool('initial')" class="tool-btn py-3 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2 font-semibold text-gray-700 transition">🔤 Initial</button>
+                    <button id="btnDate" onclick="selectTool('date')" class="tool-btn py-3 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2 font-semibold text-gray-700 transition">📅 Date & Time</button>
+                    <button id="btnText" onclick="selectTool('text')" class="tool-btn py-3 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2 font-semibold text-gray-700 transition">TEXT Insert Text</button>
+                </div>
+                <div class="mt-6 border-t pt-4">
+                    <label class="flex items-start gap-2 mb-4 cursor-pointer">
+                        <input type="checkbox" id="consentCheck" class="mt-1 w-4 h-4 text-blue-600 rounded">
+                        <span class="text-xs text-gray-600 leading-tight">I agree to be legally bound by this electronic signature.</span>
+                    </label>
+                    <button id="finishBtn" disabled class="w-full py-3 bg-gray-400 text-white font-bold rounded-lg shadow-sm cursor-not-allowed transition">Finish & Sign</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full md:w-3/4">
+            <div id="pdfContainer" class="bg-gray-200 min-h-[800px] rounded-xl p-6 flex flex-col items-center gap-6 overflow-y-auto max-h-screen shadow-inner">
+                <div id="placeholderText" class="text-gray-400 mt-32 text-lg font-medium">Please upload a PDF to begin...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="sigModal" class="fixed inset-0 bg-black/60 hidden flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-xl w-[500px] shadow-2xl">
+            <h3 class="text-xl font-bold mb-4 text-gray-800">Create Signature</h3>
+            <div class="flex border-b border-gray-200 mb-4">
+                <button id="tabDraw" class="flex-1 py-2 border-b-2 border-blue-600 text-blue-600 font-bold focus:outline-none">Draw</button>
+                <button id="tabType" class="flex-1 py-2 text-gray-500 hover:text-gray-700 focus:outline-none">Type</button>
+            </div>
+            <div id="drawSection">
+                <div class="border border-gray-300 bg-gray-50 rounded-lg overflow-hidden mb-4">
+                    <canvas id="sigPad" width="450" height="200" class="cursor-crosshair w-full"></canvas>
+                </div>
+            </div>
+            <div id="typeSection" class="hidden mb-4">
+                <input type="text" id="typeInput" placeholder="Type your name" class="w-full border border-gray-300 p-4 rounded-lg text-5xl text-center mb-2 focus:ring-2 focus:ring-blue-500 outline-none" style="font-family: 'Great Vibes', cursive;">
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="closeModal()" class="px-5 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition">Cancel</button>
+                <button onclick="clearPad()" class="px-5 py-2 text-red-500 hover:bg-red-50 rounded-lg transition">Clear</button>
+                <button onclick="saveSignature()" class="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md transition">Apply</button>
+            </div>
+        </div>
+    </div>
+    <canvas id="textCanvas" width="600" height="200" class="hidden"></canvas>
+
+    <script>
+        let pdfDoc = null, pdfBytes = null;
+        let currentTool = null, savedSignature = null, savedInitial = null;
+        let activeTab = 'draw';
+        const container = document.getElementById('pdfContainer');
+        const finishBtn = document.getElementById('finishBtn');
+        const sigPad = document.getElementById('sigPad');
+        const padCtx = sigPad.getContext('2d');
+        
+        // 1. UPLOAD
+        document.getElementById('pdfUpload').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            pdfBytes = file;
+            const arrayBuffer = await file.arrayBuffer();
+            pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+            document.getElementById('placeholderText').classList.add('hidden');
+            document.getElementById('toolPalette').classList.remove('hidden');
+            container.innerHTML = '';
+            for (let i = 1; i <= pdfDoc.numPages; i++) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'page-wrapper bg-white shadow-lg';
+                wrapper.id = `page-wrapper-${i}`;
+                wrapper.dataset.pageIndex = i - 1;
+                container.appendChild(wrapper);
+                renderPageContent(i, wrapper);
+            }
+        });
+
+        async function renderPageContent(num, wrapper) {
+            const page = await pdfDoc.getPage(num);
+            const viewport = page.getViewport({ scale: 1.5 });
+            wrapper.style.width = `${viewport.width}px`;
+            wrapper.style.height = `${viewport.height}px`;
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width; canvas.height = viewport.height;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            wrapper.appendChild(canvas);
+            wrapper.addEventListener('click', (e) => handlePageClick(e, wrapper));
+        }
+
+        // 2. TOOLS
+        function selectTool(tool) {
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected-tool'));
+            currentTool = tool;
+            const btnMap = { 'signature': 'btnSign', 'initial': 'btnInitial', 'date': 'btnDate', 'text': 'btnText' };
+            const btn = document.getElementById(btnMap[tool]);
+            if(btn) btn.classList.add('selected-tool');
+            if ((tool === 'signature' && !savedSignature) || (tool === 'initial' && !savedInitial)) openModal();
+        }
+
+        function handlePageClick(e, wrapper) {
+            if (!currentTool || e.target.classList.contains('draggable-item')) return;
+            const rect = wrapper.getBoundingClientRect();
+            createFieldElement(e.clientX - rect.left, e.clientY - rect.top, wrapper);
+        }
+
+        function createFieldElement(x, y, wrapper) {
+            const div = document.createElement('div');
+            div.className = 'draggable-item';
+            div.style.left = `${x}px`; div.style.top = `${y}px`;
+            let value = '', type = '';
+
+            if (currentTool === 'signature') {
+                if(!savedSignature) { openModal(); return; }
+                const img = document.createElement('img'); img.src = savedSignature; img.width = 150;
+                div.appendChild(img); value = savedSignature; type = 'image';
+            } else if (currentTool === 'initial') {
+                if(!savedInitial) { openModal(); return; }
+                const img = document.createElement('img'); img.src = savedInitial; img.width = 80;
+                div.appendChild(img); value = savedInitial; type = 'image';
+            } 
+            // ============================================
+            // UPDATE: Date AND Time Logic
+            // ============================================
+            else if (currentTool === 'date') {
+                // Generates format like "1/12/2026, 1:45 PM"
+                const dateStr = new Date().toLocaleString([], {
+                    year: 'numeric', month: 'numeric', day: 'numeric', 
+                    hour: '2-digit', minute: '2-digit'
+                });
+                div.innerText = dateStr; 
+                div.className += ' text-xs font-bold bg-white/80 px-2 py-1 border-gray-300 whitespace-nowrap';
+                value = dateStr; type = 'text';
+            } 
+            else if (currentTool === 'text') {
+                const text = prompt("Enter text:", "");
+                if (!text) return;
+                div.innerText = text; div.className += ' text-sm bg-white/80 px-2 py-1 border-gray-300';
+                value = text; type = 'text';
+            }
+            enableDrag(div);
+            div.dataset.type = type; div.dataset.value = value;
+            div.dataset.uuid = Math.random().toString(36).substring(2, 12).toUpperCase();
+            
+            wrapper.appendChild(div);
+            checkValidity();
+        }
+
+        function enableDrag(el) {
+            let isDragging = false, startX, startY, initialLeft, initialTop;
+            el.addEventListener('mousedown', start); el.addEventListener('touchstart', start, {passive: false});
+            function start(e) {
+                isDragging = true;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                startX = clientX; startY = clientY;
+                initialLeft = el.offsetLeft; initialTop = el.offsetTop;
+                el.style.cursor = 'grabbing'; e.stopPropagation();
+            }
+            window.addEventListener('mousemove', move); window.addEventListener('touchmove', move, {passive: false});
+            function move(e) {
+                if (!isDragging) return;
+                e.preventDefault();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                el.style.left = `${initialLeft + (clientX - startX)}px`;
+                el.style.top = `${initialTop + (clientY - startY)}px`;
+            }
+            window.addEventListener('mouseup', end); window.addEventListener('touchend', end);
+            function end() { isDragging = false; el.style.cursor = 'grab'; }
+        }
+
+        // 4. MODAL
+        function openModal() { document.getElementById('sigModal').classList.remove('hidden'); setupPad(); }
+        function closeModal() { document.getElementById('sigModal').classList.add('hidden'); }
+        document.getElementById('tabDraw').onclick = () => {
+            activeTab = 'draw';
+            document.getElementById('drawSection').classList.remove('hidden');
+            document.getElementById('typeSection').classList.add('hidden');
+        };
+        document.getElementById('tabType').onclick = () => {
+            activeTab = 'type';
+            document.getElementById('drawSection').classList.add('hidden');
+            document.getElementById('typeSection').classList.remove('hidden');
+            const nameVal = document.getElementById('signerName').value;
+            if(nameVal) document.getElementById('typeInput').value = nameVal;
+        };
+
+        function clearPad() { 
+            padCtx.clearRect(0,0,sigPad.width, sigPad.height); 
+            document.getElementById('typeInput').value = '';
+        }
+        function setupPad() {
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            sigPad.width = 450 * ratio; sigPad.height = 200 * ratio;
+            padCtx.scale(ratio, ratio);
+            padCtx.lineWidth = 3; padCtx.strokeStyle = "#000"; padCtx.lineJoin = "round"; padCtx.lineCap = "round";
+            let isDrawing = false;
+            sigPad.onmousedown = (e) => { isDrawing = true; padCtx.beginPath(); padCtx.moveTo(e.offsetX, e.offsetY); };
+            sigPad.onmousemove = (e) => { if(isDrawing) { padCtx.lineTo(e.offsetX, e.offsetY); padCtx.stroke(); }};
+            sigPad.onmouseup = () => isDrawing = false;
+        }
+        function saveSignature() {
+            let dataUrl;
+            if (activeTab === 'draw') {
+                dataUrl = sigPad.toDataURL('image/png');
+            } else {
+                const text = document.getElementById('typeInput').value.trim();
+                if(!text) return alert("Please type something");
+                const tCan = document.getElementById('textCanvas');
+                const tCtx = tCan.getContext('2d');
+                tCtx.clearRect(0,0,tCan.width, tCan.height);
+                tCtx.font = "80px 'Great Vibes'"; tCtx.fillStyle = "black";
+                tCtx.textAlign = "center"; tCtx.textBaseline = "middle";
+                tCtx.fillText(text, tCan.width/2, tCan.height/2);
+                dataUrl = tCan.toDataURL('image/png');
+            }
+            if (currentTool === 'signature') savedSignature = dataUrl;
+            if (currentTool === 'initial') savedInitial = dataUrl;
+            closeModal(); clearPad();
+        }
+
+        // 5. SUBMIT
+        document.getElementById('consentCheck').addEventListener('change', checkValidity);
+        function checkValidity() {
+            const hasFields = document.querySelectorAll('.draggable-item').length > 0;
+            const consented = document.getElementById('consentCheck').checked;
+            finishBtn.disabled = !(hasFields && consented);
+            finishBtn.classList.toggle('bg-green-600', hasFields && consented);
+            finishBtn.classList.toggle('cursor-pointer', hasFields && consented);
+        }
+
+        finishBtn.addEventListener('click', async () => {
+            finishBtn.innerText = "Encrypting...";
+            finishBtn.disabled = true;
+
+            const allFields = [];
+            document.querySelectorAll('.page-wrapper').forEach(wrapper => {
+                const pageIdx = parseInt(wrapper.dataset.pageIndex);
+                wrapper.querySelectorAll('.draggable-item').forEach(item => {
+                    const xPercent = item.offsetLeft / wrapper.offsetWidth;
+                    const yPercent = item.offsetTop / wrapper.offsetHeight;
+                    allFields.push({
+                        type: item.dataset.type, 
+                        value: item.dataset.value,
+                        uuid: item.dataset.uuid,
+                        pageIndex: pageIdx, 
+                        xPercent: xPercent, 
+                        yPercent: yPercent
+                    });
+                });
+            });
+
+            const formData = new FormData();
+            formData.append('pdf', pdfBytes);
+            formData.append('fields', JSON.stringify(allFields));
+            formData.append('signerName', document.getElementById('signerName').value || 'Guest');
+            formData.append('signerEmail', document.getElementById('signerEmail').value);
+            formData.append('envelopeId', 'ENV-' + Date.now());
+
+            try {
+                const res = await fetch('/sign-document', { method: 'POST', body: formData });
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(errText);
+                }
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'Signed_Document.pdf';
+                document.body.appendChild(a); a.click();
+                window.URL.revokeObjectURL(url);
+                finishBtn.innerText = "✅ Signed!";
+                setTimeout(() => { finishBtn.innerText = "Finish & Sign"; finishBtn.disabled = false; }, 3000);
+            } catch (e) {
+                alert('Failed: ' + e.message);
+                finishBtn.innerText = "Finish & Sign";
+                finishBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
