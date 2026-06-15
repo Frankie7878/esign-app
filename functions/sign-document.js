@@ -61,16 +61,22 @@ export async function onRequestPost(context) {
         let y = height - (height * parseFloat(field.yPercent));
 
         if (field.type === 'image') {
-            const pngImage = await pdfDoc.embedPng(field.value);
+            let image;
+            const isJpg = field.value.startsWith('data:image/jpeg') || field.value.startsWith('data:image/jpg');
+            if (isJpg) {
+                image = await pdfDoc.embedJpg(field.value);
+            } else {
+                image = await pdfDoc.embedPng(field.value);
+            }
             
             // Capture for audit page
             if (!signatureSpecimen) {
-                signatureSpecimen = pngImage;
+                signatureSpecimen = image;
                 signatureUUID = field.uuid || Math.random().toString(36).substring(2, 12).toUpperCase();
             }
             
             const sigWidth = 120;
-            const sigHeight = (pngImage.height / pngImage.width) * sigWidth;
+            const sigHeight = (image.height / image.width) * sigWidth;
             const blockHeight = sigHeight + 12;
             const drawY = y - blockHeight;
 
@@ -82,7 +88,7 @@ export async function onRequestPost(context) {
                 color: rgb(0.2, 0.2, 0.2)
             });
 
-            page.drawImage(pngImage, { 
+            page.drawImage(image, { 
                 x: x + 10, 
                 y: drawY + 6,
                 width: sigWidth, 

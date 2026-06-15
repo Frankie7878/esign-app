@@ -268,10 +268,19 @@
         function loadUploadedImage(file) {
             const reader = new FileReader();
             reader.onload = (ev) => {
-                uploadedImageDataUrl = ev.target.result;
-                document.getElementById('uploadPreview').src = uploadedImageDataUrl;
-                document.getElementById('uploadDropZone').classList.add('hidden');
-                document.getElementById('uploadPreviewWrap').classList.remove('hidden');
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    uploadedImageDataUrl = canvas.toDataURL('image/png');
+                    document.getElementById('uploadPreview').src = uploadedImageDataUrl;
+                    document.getElementById('uploadDropZone').classList.add('hidden');
+                    document.getElementById('uploadPreviewWrap').classList.remove('hidden');
+                };
+                img.src = ev.target.result;
             };
             reader.readAsDataURL(file);
         }
