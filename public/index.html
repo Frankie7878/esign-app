@@ -66,6 +66,7 @@
             <div class="flex border-b border-gray-200 mb-4">
                 <button id="tabDraw" class="flex-1 py-2 border-b-2 border-blue-600 text-blue-600 font-bold focus:outline-none">Draw</button>
                 <button id="tabType" class="flex-1 py-2 text-gray-500 hover:text-gray-700 focus:outline-none">Type</button>
+                <button id="tabUpload" class="flex-1 py-2 text-gray-500 hover:text-gray-700 focus:outline-none">🖼️ Upload</button>
             </div>
             <div id="drawSection">
                 <div class="border border-gray-300 bg-gray-50 rounded-lg overflow-hidden mb-4">
@@ -74,6 +75,20 @@
             </div>
             <div id="typeSection" class="hidden mb-4">
                 <input type="text" id="typeInput" placeholder="Type your name" class="w-full border border-gray-300 p-4 rounded-lg text-5xl text-center mb-2 focus:ring-2 focus:ring-blue-500 outline-none" style="font-family: 'Great Vibes', cursive;">
+            </div>
+            <div id="uploadSection" class="hidden mb-4">
+                <label for="sigImageUpload" class="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-blue-50 hover:border-blue-400 transition" id="uploadDropZone">
+                    <span class="text-3xl mb-1">📁</span>
+                    <span class="text-sm text-gray-500">Click to upload or drag &amp; drop</span>
+                    <span class="text-xs text-gray-400 mt-1">PNG, JPG, GIF supported</span>
+                    <input type="file" id="sigImageUpload" accept="image/*" class="hidden">
+                </label>
+                <div id="uploadPreviewWrap" class="hidden mt-3 flex flex-col items-center gap-2">
+                    <div class="border border-gray-200 rounded-lg overflow-hidden bg-gray-50 p-2">
+                        <img id="uploadPreview" src="" alt="Signature preview" class="max-h-32 max-w-full object-contain">
+                    </div>
+                    <button onclick="clearUpload()" class="text-xs text-red-500 hover:underline">Remove image</button>
+                </div>
             </div>
             <div class="flex justify-end gap-3 mt-6">
                 <button onclick="closeModal()" class="px-5 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition">Cancel</button>
@@ -210,22 +225,69 @@
         // 4. MODAL
         function openModal() { document.getElementById('sigModal').classList.remove('hidden'); setupPad(); }
         function closeModal() { document.getElementById('sigModal').classList.add('hidden'); }
-        document.getElementById('tabDraw').onclick = () => {
-            activeTab = 'draw';
-            document.getElementById('drawSection').classList.remove('hidden');
-            document.getElementById('typeSection').classList.add('hidden');
-        };
+        function setActiveTab(tab) {
+            activeTab = tab;
+            const tabs = { draw: 'tabDraw', type: 'tabType', upload: 'tabUpload' };
+            const sections = { draw: 'drawSection', type: 'typeSection', upload: 'uploadSection' };
+            Object.keys(tabs).forEach(t => {
+                const isActive = t === tab;
+                document.getElementById(tabs[t]).classList.toggle('border-b-2', isActive);
+                document.getElementById(tabs[t]).classList.toggle('border-blue-600', isActive);
+                document.getElementById(tabs[t]).classList.toggle('text-blue-600', isActive);
+                document.getElementById(tabs[t]).classList.toggle('font-bold', isActive);
+                document.getElementById(tabs[t]).classList.toggle('text-gray-500', !isActive);
+                document.getElementById(sections[t]).classList.toggle('hidden', !isActive);
+            });
+        }
+        document.getElementById('tabDraw').onclick = () => setActiveTab('draw');
         document.getElementById('tabType').onclick = () => {
-            activeTab = 'type';
-            document.getElementById('drawSection').classList.add('hidden');
-            document.getElementById('typeSection').classList.remove('hidden');
+            setActiveTab('type');
             const nameVal = document.getElementById('signerName').value;
             if(nameVal) document.getElementById('typeInput').value = nameVal;
         };
+        document.getElementById('tabUpload').onclick = () => setActiveTab('upload');
+
+        // --- Image Upload Logic ---
+        let uploadedImageDataUrl = null;
+        const sigImageUpload = document.getElementById('sigImageUpload');
+        const uploadDropZone = document.getElementById('uploadDropZone');
+
+        sigImageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) loadUploadedImage(file);
+        });
+        uploadDropZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadDropZone.classList.add('border-blue-500', 'bg-blue-50'); });
+        uploadDropZone.addEventListener('dragleave', () => { uploadDropZone.classList.remove('border-blue-500', 'bg-blue-50'); });
+        uploadDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadDropZone.classList.remove('border-blue-500', 'bg-blue-50');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) loadUploadedImage(file);
+        });
+
+        function loadUploadedImage(file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                uploadedImageDataUrl = ev.target.result;
+                document.getElementById('uploadPreview').src = uploadedImageDataUrl;
+                document.getElementById('uploadDropZone').classList.add('hidden');
+                document.getElementById('uploadPreviewWrap').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearUpload() {
+            uploadedImageDataUrl = null;
+            sigImageUpload.value = '';
+            document.getElementById('uploadPreview').src = '';
+            document.getElementById('uploadDropZone').classList.remove('hidden');
+            document.getElementById('uploadPreviewWrap').classList.add('hidden');
+        }
 
         function clearPad() { 
             padCtx.clearRect(0,0,sigPad.width, sigPad.height); 
             document.getElementById('typeInput').value = '';
+            clearUpload();
         }
         function setupPad() {
             const ratio = Math.max(window.devicePixelRatio || 1, 1);
@@ -241,7 +303,7 @@
             let dataUrl;
             if (activeTab === 'draw') {
                 dataUrl = sigPad.toDataURL('image/png');
-            } else {
+            } else if (activeTab === 'type') {
                 const text = document.getElementById('typeInput').value.trim();
                 if(!text) return alert("Please type something");
                 const tCan = document.getElementById('textCanvas');
@@ -251,6 +313,9 @@
                 tCtx.textAlign = "center"; tCtx.textBaseline = "middle";
                 tCtx.fillText(text, tCan.width/2, tCan.height/2);
                 dataUrl = tCan.toDataURL('image/png');
+            } else if (activeTab === 'upload') {
+                if (!uploadedImageDataUrl) return alert("Please upload an image first");
+                dataUrl = uploadedImageDataUrl;
             }
             if (currentTool === 'signature') savedSignature = dataUrl;
             if (currentTool === 'initial') savedInitial = dataUrl;
@@ -307,14 +372,92 @@
                 a.href = url; a.download = 'Signed_Document.pdf';
                 document.body.appendChild(a); a.click();
                 window.URL.revokeObjectURL(url);
-                finishBtn.innerText = "✅ Signed!";
-                setTimeout(() => { finishBtn.innerText = "Finish & Sign"; finishBtn.disabled = false; }, 3000);
+
+                // Show success overlay then reset
+                showSuccessOverlay();
+                setTimeout(() => resetSession(), 2800);
+
             } catch (e) {
                 alert('Failed: ' + e.message);
                 finishBtn.innerText = "Finish & Sign";
                 finishBtn.disabled = false;
             }
         });
+
+        // ── Success overlay ──────────────────────────────────────
+        function showSuccessOverlay() {
+            const overlay = document.createElement('div');
+            overlay.id = 'successOverlay';
+            overlay.style.cssText = [
+                'position:fixed','inset:0','z-index:9999',
+                'display:flex','flex-direction:column',
+                'align-items:center','justify-content:center',
+                'background:rgba(0,0,0,0.55)',
+                'backdrop-filter:blur(6px)',
+                'animation:fadeIn .3s ease'
+            ].join(';');
+            overlay.innerHTML = `
+                <style>
+                  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+                  @keyframes popIn  { from{transform:scale(.7);opacity:0} to{transform:scale(1);opacity:1} }
+                  @keyframes fadeOut{ from{opacity:1} to{opacity:0} }
+                </style>
+                <div style="background:#fff;border-radius:20px;padding:48px 56px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.3);animation:popIn .35s cubic-bezier(.34,1.56,.64,1) both">
+                    <div style="font-size:72px;line-height:1;margin-bottom:16px">✅</div>
+                    <h2 style="font-size:24px;font-weight:700;color:#111;margin:0 0 8px">Document Signed!</h2>
+                    <p style="font-size:14px;color:#6b7280;margin:0">Your signed PDF has been downloaded.<br>Returning to home in a moment…</p>
+                    <div style="margin-top:24px;height:4px;border-radius:999px;background:#e5e7eb;overflow:hidden">
+                        <div style="height:100%;border-radius:999px;background:linear-gradient(90deg,#16a34a,#4ade80);width:100%;animation:shrink 2.5s linear forwards"></div>
+                    </div>
+                </div>
+                <style>@keyframes shrink{from{width:100%}to{width:0%}}</style>
+            `;
+            document.body.appendChild(overlay);
+        }
+
+        // ── Full session reset ───────────────────────────────────
+        function resetSession() {
+            // Fade out overlay
+            const overlay = document.getElementById('successOverlay');
+            if (overlay) {
+                overlay.style.animation = 'fadeOut .4s ease forwards';
+                setTimeout(() => overlay.remove(), 400);
+            }
+
+            // Reset state variables
+            pdfDoc = null;
+            pdfBytes = null;
+            currentTool = null;
+            savedSignature = null;
+            savedInitial = null;
+            activeTab = 'draw';
+            uploadedImageDataUrl = null;
+
+            // Reset form fields
+            document.getElementById('signerName').value = '';
+            document.getElementById('signerEmail').value = '';
+            document.getElementById('pdfUpload').value = '';
+            document.getElementById('consentCheck').checked = false;
+
+            // Reset PDF canvas area
+            const cnt = document.getElementById('pdfContainer');
+            cnt.innerHTML = '<div id="placeholderText" class="text-gray-400 mt-32 text-lg font-medium">Please upload a PDF to begin...</div>';
+
+            // Hide tool palette
+            document.getElementById('toolPalette').classList.add('hidden');
+
+            // Reset tool buttons
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected-tool'));
+
+            // Reset finish button
+            finishBtn.innerText = 'Finish & Sign';
+            finishBtn.disabled = true;
+            finishBtn.classList.remove('bg-green-600', 'cursor-pointer');
+
+            // Reset signature modal tabs back to Draw
+            setActiveTab('draw');
+            clearPad();
+        }
     </script>
 </body>
 </html>
