@@ -37,7 +37,30 @@ export async function onRequestPost(context) {
     if (ip.includes('::ffff:')) ip = ip.split('::ffff:')[1];
 
     const originalPdfBytes = new Uint8Array(await pdfFile.arrayBuffer());
-    const originalDoc = await PDFDocument.load(originalPdfBytes);
+    let originalDoc;
+    try {
+      originalDoc = await PDFDocument.load(originalPdfBytes);
+    } catch (err) {
+      if (err.message.includes('encrypted')) {
+        throw new Error('此文档已加密或被安全锁定，无法进行修改或重新签署。');
+      }
+      throw err;
+    }
+
+    // 检测文档是否已被数字签名
+    let hasSignature = false;
+    try {
+      const form = originalDoc.getForm();
+      const fields = form.getFields();
+      hasSignature = fields.some(field => field.constructor.name === 'PDFSignature');
+    } catch (e) {
+      // 如果文档没有表单或获取表单失败，说明没有签名，可以安全忽略
+    }
+
+    if (hasSignature) {
+      throw new Error('此文档已包含数字签名，无法进行修改或重新签署。');
+    }
+
     const pdfDoc = await PDFDocument.create();
     const copiedPages = await pdfDoc.copyPages(originalDoc, originalDoc.getPageIndices());
     copiedPages.forEach(page => pdfDoc.addPage(page));
