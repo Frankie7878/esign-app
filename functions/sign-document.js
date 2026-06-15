@@ -4,26 +4,12 @@ import { SignPdf } from '@signpdf/signpdf';
 import { P12Signer } from '@signpdf/signer-p12';
 import { plainAddPlaceholder } from '@signpdf/placeholder-plain';
 
+const P12_BASE64 = "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";
+
 let p12Buffer;
 function generateIdentity() {
   if (p12Buffer) return p12Buffer;
-  console.log('🔐 Generating Identity...');
-  const keys = forge.pki.rsa.generateKeyPair(2048);
-  const cert = forge.pki.createCertificate();
-  cert.publicKey = keys.publicKey;
-  cert.serialNumber = '01';
-  cert.validity.notBefore = new Date();
-  cert.validity.notAfter = new Date();
-  cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
-  const attrs = [{ name: 'commonName', value: 'My E-Sign App User' }];
-  cert.setSubject(attrs);
-  cert.setIssuer(attrs);
-  cert.sign(keys.privateKey, forge.md.sha256.create());
-  const p12Asn1 = forge.pkcs12.toPkcs12Asn1(keys.privateKey, cert, 'password', {
-    algorithm: '3des', friendlyName: 'signing-key', generateLocalKeyId: true, macAlgorithm: 'sha1', iterationCount: 2048,
-  });
-  p12Buffer = Buffer.from(forge.asn1.toDer(p12Asn1).getBytes(), 'binary');
-  console.log('✅ Identity Ready.');
+  p12Buffer = Buffer.from(P12_BASE64, 'base64');
   return p12Buffer;
 }
 
