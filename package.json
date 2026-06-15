@@ -5,7 +5,9 @@
   "description": "Simple E-Sign App",
   "main": "server.mjs",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "dev": "wrangler pages dev public --compatibility-flag nodejs_compat",
+    "deploy": "wrangler pages deploy public"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -16,7 +18,11 @@
     "@signpdf/signer-p12": "^3.0.0",
     "@signpdf/placeholder-plain": "^3.0.0"
   },
+  "devDependencies": {
+    "wrangler": "^3.57.1"
+  },
   "engines": {
     "node": ">=18.0.0"
   }
 }
+
